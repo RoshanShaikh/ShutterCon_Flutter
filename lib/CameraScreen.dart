@@ -16,30 +16,39 @@ class _CameraScreenState extends State<CameraScreen> {
   late Future<void> _initializeControllerFuture;
 
   int selectedCamera = 0;
-  int count = 2;
+  int noOfClicks = 10;
+  int clickCounter = 0;
 
   TextEditingController _noOfClicks = TextEditingController();
 
   Future<void> captureImage() async {
-    if (await Permission.accessMediaLocation.status.isGranted) {
-      await _initializeControllerFuture;
-      await _controller.unlockCaptureOrientation();
-      await _controller.setFlashMode(FlashMode.off);
-
-      var xFile = await _controller.takePicture();
-
-      Directory directory = await Directory('/storage/emulated/0/DCIM/Shutter')
-          .create(recursive: true);
-      if (await directory.exists()) {
-        print(directory.path);
-        DateTime d = DateTime.now();
-        String filename =
-            '${d.day}${d.month}${d.year}${d.hour}${d.minute}${d.second}';
-        await File(xFile.path).copy('${directory.path}/$filename.jpeg');
-        print('Copied to ${directory.path}/$filename.jpeg');
+    while (true) {
+      if (await Permission.camera.status.isDenied) {
+        await Permission.camera.request();
       }
-    } else {
-      Permission.accessMediaLocation.request();
+      if (await Permission.accessMediaLocation.status.isDenied) {
+        await Permission.accessMediaLocation.request();
+      }
+      if (await Permission.accessMediaLocation.status.isGranted &&
+          await Permission.camera.status.isGranted) {
+        break;
+      }
+    }
+    await _initializeControllerFuture;
+    await _controller.unlockCaptureOrientation();
+    await _controller.setFlashMode(FlashMode.off);
+
+    var xFile = await _controller.takePicture();
+
+    Directory directory = await Directory('/storage/emulated/0/DCIM/Shutter')
+        .create(recursive: true);
+    if (await directory.exists()) {
+      print(directory.path);
+      DateTime d = DateTime.now();
+      String filename =
+          '${d.day}${d.month}${d.year}${d.hour}${d.minute}${d.second}';
+      await File(xFile.path).copy('${directory.path}/$filename.jpeg');
+      print('Copied to ${directory.path}/$filename.jpeg');
     }
   }
 
@@ -76,12 +85,13 @@ class _CameraScreenState extends State<CameraScreen> {
   Widget build(BuildContext context) {
     Permission.accessMediaLocation.request();
 
-    _noOfClicks.text = count.toString();
+    _noOfClicks.text = noOfClicks.toString();
 
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             FutureBuilder(
               future: _initializeControllerFuture,
@@ -100,24 +110,36 @@ class _CameraScreenState extends State<CameraScreen> {
                 }
               },
             ),
-            // Material(
-            //   color: Colors.white,
-            //   child: TextField(decoration: InputDecoration(
-            //                   contentPadding: EdgeInsets.only(
-            //                       top: 15.0, left: 15.0, bottom: 15.0,),),
-            //     controller: _noOfClicks,
-            //   ),
-            // ),
             Container(
-              margin: EdgeInsets.all(12.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              width: MediaQuery.of(context).size.width,
+              height: 100,
+              alignment: Alignment.center,
+              child: Stack(
                 children: [
-                  Expanded(
+                  Positioned(
+                    child: Text(
+                      clickCounter.toString(),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 25,
+                      ),
+                    ),
+                    bottom: MediaQuery.of(context).size.width * 0.1,
+                    left: MediaQuery.of(context).size.width * 0.1,
+                  ),
+                  Positioned(
+                    bottom: 15.0,
+                    left: MediaQuery.of(context).size.width / 2 - 35.0,
+                    right: MediaQuery.of(context).size.width / 2 - 35.0,
                     child: RawMaterialButton(
                       onPressed: () async {
-                        for (var i = 0; i < count; i++) {
+                        clickCounter = 0;
+                        for (var i = 0; i < noOfClicks; i++) {
                           print(i + 1);
+                          setState(() {
+                            clickCounter++;
+                            print(clickCounter);
+                          });
                           await captureImage();
                         }
                       },
@@ -127,7 +149,7 @@ class _CameraScreenState extends State<CameraScreen> {
                       shape: CircleBorder(), //circular button
                       fillColor: Colors.white, //background color
                       splashColor: Colors.grey[400],
-                      highlightColor: Colors.red,
+                      highlightColor: Colors.grey[400],
                       child: Container(
                         width: 70.0,
                         height: 70.0,
@@ -138,7 +160,9 @@ class _CameraScreenState extends State<CameraScreen> {
                       ),
                     ),
                   ),
-                  Container(
+                  Positioned(
+                    bottom: 15.0,
+                    right: 15.0,
                     child: RawMaterialButton(
                       elevation: 0.0,
                       constraints: BoxConstraints(),
@@ -153,7 +177,7 @@ class _CameraScreenState extends State<CameraScreen> {
                   ),
                 ],
               ),
-            )
+            ),
           ],
         ),
       ),
