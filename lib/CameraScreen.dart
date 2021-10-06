@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-import 'package:flutter/services.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({Key? key, required this.cameras}) : super(key: key);
@@ -20,38 +18,59 @@ class _CameraScreenState extends State<CameraScreen> {
   int selectedCamera = 0;
   int noOfClicks = 10;
   int clickCounter = 0;
-  bool clicking = false;
+  bool showCounter = false;
+  bool readyToClick = false;
 
-  TextEditingController _clicksController = TextEditingController();
-
-  Future<void> captureImage() async {
-    await checkPermissions();
+  Future<void> captureImage(String foldername) async {
     await _initializeControllerFuture;
     await _controller.unlockCaptureOrientation();
     await _controller.setFlashMode(FlashMode.off);
 
     var xFile = await _controller.takePicture();
 
-    Directory directory = await Directory('/storage/emulated/0/DCIM/Shutter')
-        .create(recursive: true);
+    Directory directory =
+        await Directory('/storage/emulated/0/DCIM/Shutter/$foldername')
+            .create(recursive: true);
     if (await directory.exists()) {
       print(directory.path);
       DateTime d = DateTime.now();
-      String filename =
-          '${d.day}${d.month}${d.year}${d.hour}${d.minute}${d.second}';
+      String filename = d.toString().replaceAll(RegExp(r'[- :.]'), '');
       await File(xFile.path).copy('${directory.path}/$filename.jpeg');
       print('Copied to ${directory.path}/$filename.jpeg');
     }
   }
 
   Future<void> switchCamera() async {
+    if (!readyToClick) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.white,
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.fixed,
+          content: Text(
+            'Can\'t Switch Camera!',
+            style: TextStyle(color: Colors.red),
+          ),
+        ),
+      );
+      return;
+    }
     if (widget.cameras.length > 1) {
       selectedCamera = (selectedCamera == 0) ? 1 : 0;
       await _initializeCamera(selectedCamera);
       setState(() {});
     } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Secondary Camera Not Found')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: Colors.white,
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.fixed,
+          content: Text(
+            'Secondary Camera Not Found!',
+            style: TextStyle(color: Colors.red),
+          ),
+        ),
+      );
     }
   }
 
@@ -59,13 +78,7 @@ class _CameraScreenState extends State<CameraScreen> {
     _controller = CameraController(
         widget.cameras[cameraIndex], ResolutionPreset.ultraHigh);
     _initializeControllerFuture = _controller.initialize();
-  }
-
-  Future<void> checkPermissions() async {
-    await Permission.accessMediaLocation.request();
-    if (await Permission.accessMediaLocation.status.isDenied) {
-      SystemNavigator.pop();
-    }
+    readyToClick = true;
   }
 
   @override
@@ -82,33 +95,58 @@ class _CameraScreenState extends State<CameraScreen> {
 
   @override
   Widget build(BuildContext context) {
-    _clicksController.text = noOfClicks.toString();
-
-    var rawMaterialButton = RawMaterialButton(
+    RawMaterialButton shutterButton = RawMaterialButton(
       onPressed: () async {
+        if (!readyToClick) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.white,
+              duration: Duration(seconds: 1),
+              behavior: SnackBarBehavior.fixed,
+              content: Text(
+                'Already Capturing!',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          );
+          print('already Capturing.');
+          return;
+        }
+
+        readyToClick = false;
         clickCounter = 0;
         setState(() {
-          clicking = true;
+          showCounter = true;
         });
 
-        for (var i = 0; i < noOfClicks; i++) {
-          await captureImage();
+        DateTime d = DateTime.now();
+        String foldername = d.toString().replaceAll(RegExp(r'[ :.]'), '-');
+
+        for (var i = 1; i <= noOfClicks; i++) {
+          await captureImage(foldername);
+          showCounter = true;
           setState(() {
             clickCounter++;
             print(clickCounter);
           });
+          if (i != noOfClicks)
+            await Future.delayed(Duration(milliseconds: 900));
         }
 
+        readyToClick = true;
+
         Timer(Duration(seconds: 2), () {
-          setState(() {
-            clicking = false;
-          });
+          if (readyToClick) {
+            setState(() {
+              showCounter = false;
+            });
+          }
         });
       },
       elevation: 0.0,
-      constraints: BoxConstraints(), //removes empty spaces around of icon
-      shape: CircleBorder(), //circular button
-      fillColor: Colors.white, //background color
+      constraints: BoxConstraints(), // removes empty spaces around of icon
+      shape: CircleBorder(), // circular button
+      fillColor: Colors.white, // background color
       splashColor: Colors.grey[400],
       highlightColor: Colors.grey[400],
       child: Container(
@@ -120,6 +158,55 @@ class _CameraScreenState extends State<CameraScreen> {
         ),
       ),
     );
+
+    RawMaterialButton switchCameraButton = RawMaterialButton(
+      elevation: 0.0,
+      constraints: BoxConstraints(),
+      shape: CircleBorder(),
+      onPressed: switchCamera,
+      child: Icon(
+        Icons.change_circle_rounded,
+        color: Colors.white,
+        size: 60.0,
+      ),
+    );
+
+    ElevatedButton changeCountButton = ElevatedButton(
+      onPressed: () {
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              content: TextField(
+                onChanged: (String value) {
+                  noOfClicks = int.parse(value);
+                },
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  label: Text('No. Of Clicks'),
+                ),
+                onSubmitted: (value) {
+                  Navigator.pop(context);
+                },
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                  child: Text('Done'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+      child: Text(
+        noOfClicks.toString(),
+      ),
+    );
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
@@ -128,32 +215,35 @@ class _CameraScreenState extends State<CameraScreen> {
           children: [
             FutureBuilder(
               future: _initializeControllerFuture,
-              builder: (context, snapshot) {
+              builder: (BuildContext context, AsyncSnapshot snapshot) {
                 if (snapshot.connectionState == ConnectionState.done) {
-                  return Stack(children: [
-                    CameraPreview(_controller),
-                    if (clicking)
-                      Positioned(
-                        child: Container(
-                          width: 70,
-                          height: 70,
-                          decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(35.0),
-                              color: Colors.black12),
-                          child: Center(
-                            child: Text(
-                              clickCounter.toString(),
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 25,
+                  return Stack(
+                    children: [
+                      CameraPreview(_controller),
+                      if (showCounter)
+                        Positioned(
+                          child: Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(35.0),
+                                color: Colors.black12),
+                            child: Center(
+                              child: Text(
+                                clickCounter.toString(),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 25,
+                                ),
                               ),
                             ),
                           ),
+                          right: MediaQuery.of(context).size.width / 2 - 35.0,
+                          left: MediaQuery.of(context).size.width / 2 - 35.0,
+                          top: MediaQuery.of(context).size.height * 0.1,
                         ),
-                        right: MediaQuery.of(context).size.width / 2 - 35.0,
-                        top: MediaQuery.of(context).size.height * 0.1,
-                      ),
-                  ]);
+                    ],
+                  );
                 } else {
                   return Container(
                     height: MediaQuery.of(context).size.height * 0.80,
@@ -172,27 +262,30 @@ class _CameraScreenState extends State<CameraScreen> {
               alignment: Alignment.center,
               child: Stack(
                 children: [
-                  Positioned(
-                    bottom: 15.0,
-                    left: MediaQuery.of(context).size.width / 2 - 35.0,
-                    right: MediaQuery.of(context).size.width / 2 - 35.0,
-                    child: rawMaterialButton,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      changeCountButton,
+                      shutterButton,
+                      switchCameraButton,
+                    ],
                   ),
-                  Positioned(
-                    bottom: 15.0,
-                    right: 15.0,
-                    child: RawMaterialButton(
-                      elevation: 0.0,
-                      constraints: BoxConstraints(),
-                      shape: CircleBorder(),
-                      onPressed: switchCamera,
-                      child: Icon(
-                        Icons.change_circle_rounded,
-                        color: Colors.white,
-                        size: 60.0,
-                      ),
-                    ),
-                  ),
+                  // Positioned(
+                  //   bottom: 15.0,
+                  //   left: MediaQuery.of(context).size.width / 2 - 35.0,
+                  //   right: MediaQuery.of(context).size.width / 2 - 35.0,
+                  //   child: shutterButton,
+                  // ),
+                  // Positioned(
+                  //   bottom: 15.0,
+                  //   right: 15.0,
+                  //   child: switchCameraButton,
+                  // ),
+                  // Positioned(
+                  //   child: changeCountButton,
+                  //   bottom: 15.0,
+                  //   left: 15.0,
+                  // ),
                 ],
               ),
             ),
