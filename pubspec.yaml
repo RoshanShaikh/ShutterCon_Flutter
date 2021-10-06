@@ -27,6 +27,7 @@ dependencies:
     sdk: flutter
   path_provider: ^2.0.5
   permission_handler: ^8.1.6
+  shared_preferences: ^2.0.8
   xfile: ^1.1.0
 
 dev_dependencies:
