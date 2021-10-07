@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
@@ -49,21 +50,27 @@ class _CameraScreenState extends State<CameraScreen> {
 
     var xFile = await _controller.takePicture();
 
-    Directory directory =
-        await Directory('/storage/emulated/0/DCIM/Shutter Con/$foldername')
-            .create(recursive: true);
-    if (await directory.exists()) {
-      print(directory.path);
-      DateTime d = DateTime.now();
-      String filename = d.toString().replaceAll(RegExp(r'[- :.]'), '');
-      await File(xFile.path).copy('${directory.path}/$filename.jpeg');
-      print('Copied to ${directory.path}/$filename.jpeg');
-    }
+    Timer.run(
+      () async {
+        Directory directory =
+            await Directory('/storage/emulated/0/DCIM/Shutter Con/$foldername')
+                .create(recursive: true);
+        if (await directory.exists()) {
+          print(directory.path);
+          DateTime d = DateTime.now();
+          log('${d.minute}:${d.second}:${d.millisecond}');
+          String filename = d.toString().replaceAll(RegExp(r'[- :.]'), '-');
+          await File(xFile.path).copy('${directory.path}/$filename.jpeg');
+          print('Copied to ${directory.path}/$filename.jpeg');
+        }
+      },
+    );
   }
 
   Future<void> switchCamera() async {
     if (!readyToClick) {
       showSnackBar("Can't Switch While Capturing!");
+      print("Can't Switch While Capturing!");
       return;
     }
 
@@ -171,7 +178,7 @@ class _CameraScreenState extends State<CameraScreen> {
     });
 
     DateTime d = DateTime.now();
-    String foldername = d.toString().replaceAll(RegExp(r'[ :.]'), '-');
+    String foldername = d.toString().replaceAll(RegExp(r'[:.]'), '-');
 
     for (var i = 1; i <= noOfClicks; i++) {
       await captureImage(foldername);
@@ -180,7 +187,8 @@ class _CameraScreenState extends State<CameraScreen> {
         clickCounter++;
         print(clickCounter);
       });
-      if (i != noOfClicks) await Future.delayed(Duration(milliseconds: 900));
+      if (clickCounter != noOfClicks)
+        await Future.delayed(Duration(milliseconds: 400));
     }
 
     readyToClick = true;
