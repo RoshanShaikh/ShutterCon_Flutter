@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:device_info/device_info.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
@@ -42,6 +44,15 @@ class _HomeState extends State<Home> {
     Permission camera = Permission.camera;
     Permission microphone = Permission.microphone;
     Permission accessMedia = Permission.accessMediaLocation;
+
+    if (Platform.isAndroid) {
+      AndroidDeviceInfo info = await DeviceInfoPlugin().androidInfo;
+      int sdk = info.version.sdkInt;
+      if (sdk <= 28) {
+        accessMedia = Permission.storage;
+      }
+      print('sdk : $sdk');
+    }
 
     if (await camera.status.isDenied) await camera.request();
     if (await camera.status.isDenied) {
